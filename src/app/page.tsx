@@ -1,65 +1,635 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
+import { useState, useEffect } from 'react'
+import { supabase, type Facility, type Application, type Route } from '@/lib/supabase'
+import { COMUNAS, INITIAL_FACILITIES } from '@/lib/data'
+import { Home, MapPin, Calendar, Clock, Plus, Search, Filter, Download, RefreshCw } from 'lucide-react'
+
+export default function HomePage() {
+  const [activeView, setActiveView] = useState('dashboard')
+  const [facilities, setFacilities] = useState<Facility[]>([])
+  const [applications, setApplications] = useState<Application[]>([])
+  const [routes, setRoutes] = useState<Record<string, Route[]>>({
+    monday: [],
+    tuesday: [],
+    wednesday: [],
+    thursday: [],
+    friday: []
+  })
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [comunaFilter, setComunaFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState('')
+
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  async function loadData() {
+    setLoading(true)
+    try {
+      await Promise.all([
+        loadFacilities(),
+        loadApplications(),
+        loadRoutes()
+      ])
+    } catch (error) {
+      console.error('Error loading data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function loadFacilities() {
+    const { data, error } = await supabase
+      .from('facilities')
+      .select('*')
+      .order('comuna', { ascending: true })
+
+    if (error) {
+      console.error('Error loading facilities:', error)
+      // If table is empty, use initial data
+      if (!data || data.length === 0) {
+        setFacilities(INITIAL_FACILITIES as any)
+      }
+    } else {
+      setFacilities(data || [])
+      // If no data, sync initial data
+      if (!data || data.length === 0) {
+        await syncInitialData()
+      }
+    }
+  }
+
+  async function syncInitialData() {
+    const { data, error } = await supabase
+      .from('facilities')
+      .insert(INITIAL_FACILITIES)
+      .select()
+
+    if (!error && data) {
+      setFacilities(data)
+    }
+  }
+
+  async function loadApplications() {
+    const { data, error } = await supabase
+      .from('applications')
+      .select(`
+        *,
+        facilities (*)
+      `)
+      .order('created_at', { ascending: false })
+
+    if (!error) {
+      setApplications(data || [])
+    }
+  }
+
+  async function loadRoutes() {
+    const { data, error } = await supabase
+      .from('routes')
+      .select(`
+        *,
+        facilities (*)
+      `)
+      .order('order_index', { ascending: true })
+
+    if (!error && data) {
+      const routesByDay: Record<string, Route[]> = {
+        monday: [],
+        tuesday: [],
+        wednesday: [],
+        thursday: [],
+        friday: []
+      }
+
+      data.forEach((route: Route) => {
+        if (routesByDay[route.day_of_week]) {
+          routesByDay[route.day_of_week].push(route)
+        }
+      })
+
+      setRoutes(routesByDay)
+    }
+  }
+
+  // Route planning functions
+  function planRouteForDay(day: string, selectedComuna: string) {
+    // Get unvisited facilities from selected comuna
+    const comunaFacilities = facilities.filter(f => f.comuna === selectedComuna)
+    const visitedFacilityIds = applications
+      .filter(a => a.status === 'applied' || a.status === 'interview' || a.status === 'accepted')
+      .map(a => a.facility_id)
+
+    const unvisitedFacilities = comunaFacilities.filter(f => !visitedFacilityIds.includes(f.id))
+
+    if (unvisitedFacilities.length === 0) {
+      alert('¡Ya has visitado todos los centros de esta comuna!')
+      return
+    }
+
+    // Open Google Maps with route
+    openGoogleMapsRoute(unvisitedFacilities)
+  }
+
+  function openGoogleMapsRoute(facilityList: Facility[]) {
+    const origin = 'Baquedano 1044, Villa Alemana, Chile'
+
+    if (facilityList.length === 0) return
+
+    if (facilityList.length === 1) {
+      // Single destination
+      const destination = formatAddressForMaps(facilityList[0])
+      const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`
+      window.open(url, '_blank')
+    } else {
+      // Multiple waypoints - optimize route
+      const waypoints = facilityList.slice(0, -1).map(f => formatAddressForMaps(f)).join('|')
+      const destination = formatAddressForMaps(facilityList[facilityList.length - 1])
+      const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&waypoints=${encodeURIComponent(waypoints)}&travelmode=driving`
+      window.open(url, '_blank')
+    }
+  }
+
+  function formatAddressForMaps(facility: Facility): string {
+    if (facility.address) {
+      return `${facility.address}, ${facility.comuna}, Chile`
+    }
+    return `${facility.name}, ${facility.comuna}, Chile`
+  }
+
+  function openSingleFacilityInMaps(facility: Facility) {
+    const origin = 'Baquedano 1044, Villa Alemana, Chile'
+    const destination = formatAddressForMaps(facility)
+    const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`
+    window.open(url, '_blank')
+  }
+
+
+  const stats = {
+    totalFacilities: facilities.length,
+    totalApplied: applications.filter(a => a.status === 'applied').length,
+    totalPending: applications.filter(a => a.status === 'pending').length,
+    totalInterviews: applications.filter(a => a.status === 'interview').length,
+  }
+
+  const filteredFacilities = facilities.filter(f => {
+    const matchesSearch = !searchTerm ||
+      f.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      f.comuna.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesComuna = !comunaFilter || f.comuna === comunaFilter
+    const matchesType = !typeFilter || f.type === typeFilter
+    return matchesSearch && matchesComuna && matchesType
+  })
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Cargando datos...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="sticky top-0 z-50 w-full border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+                <MapPin className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                  MediJob CRM
+                </h1>
+                <p className="text-sm text-muted-foreground">V Región de Valparaíso</p>
+              </div>
+            </div>
+
+            <nav className="flex gap-2">
+              <button
+                onClick={() => setActiveView('dashboard')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${activeView === 'dashboard'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'hover:bg-muted'
+                  }`}
+              >
+                <Home className="w-5 h-5" />
+                Dashboard
+              </button>
+              <button
+                onClick={() => setActiveView('facilities')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${activeView === 'facilities'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'hover:bg-muted'
+                  }`}
+              >
+                <MapPin className="w-5 h-5" />
+                Centros
+              </button>
+              <button
+                onClick={() => setActiveView('routes')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${activeView === 'routes'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'hover:bg-muted'
+                  }`}
+              >
+                <Calendar className="w-5 h-5" />
+                Rutas
+              </button>
+              <button
+                onClick={() => setActiveView('tracker')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${activeView === 'tracker'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'hover:bg-muted'
+                  }`}
+              >
+                <Clock className="w-5 h-5" />
+                Seguimiento
+              </button>
+            </nav>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+      </header>
+
+      <main className="container mx-auto px-4 py-8">
+        {/* Dashboard View */}
+        {activeView === 'dashboard' && (
+          <div className="animate-fadeIn">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                Panel de Control
+              </h2>
+              <button
+                onClick={loadData}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
+              >
+                <RefreshCw className="w-5 h-5" />
+                Sincronizar
+              </button>
+            </div>
+
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <div className="bg-card border border-border rounded-xl p-6 hover:border-primary transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                    <MapPin className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-3xl font-bold">{stats.totalFacilities}</h3>
+                    <p className="text-sm text-muted-foreground">Total Centros</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-card border border-border rounded-xl p-6 hover:border-primary transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
+                    <Clock className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-3xl font-bold">{stats.totalApplied}</h3>
+                    <p className="text-sm text-muted-foreground">Aplicaciones Enviadas</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-card border border-border rounded-xl p-6 hover:border-primary transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-yellow-500 to-yellow-600 flex items-center justify-center">
+                    <Clock className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-3xl font-bold">{stats.totalPending}</h3>
+                    <p className="text-sm text-muted-foreground">Pendientes</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-card border border-border rounded-xl p-6 hover:border-primary transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                    <Clock className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-3xl font-bold">{stats.totalInterviews}</h3>
+                    <p className="text-sm text-muted-foreground">Entrevistas</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="bg-card border border-border rounded-xl p-6">
+              <h3 className="text-xl font-bold mb-4">Acciones Rápidas</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <button className="flex flex-col items-center gap-2 p-4 bg-muted rounded-lg hover:bg-muted/80 transition-colors">
+                  <Plus className="w-8 h-8 text-primary" />
+                  <span className="text-sm font-medium">Agregar Centro</span>
+                </button>
+                <button
+                  onClick={() => setActiveView('routes')}
+                  className="flex flex-col items-center gap-2 p-4 bg-muted rounded-lg hover:bg-muted/80 transition-colors"
+                >
+                  <Calendar className="w-8 h-8 text-primary" />
+                  <span className="text-sm font-medium">Planificar Ruta</span>
+                </button>
+                <button className="flex flex-col items-center gap-2 p-4 bg-muted rounded-lg hover:bg-muted/80 transition-colors">
+                  <Download className="w-8 h-8 text-primary" />
+                  <span className="text-sm font-medium">Exportar Datos</span>
+                </button>
+                <button
+                  onClick={() => setActiveView('facilities')}
+                  className="flex flex-col items-center gap-2 p-4 bg-muted rounded-lg hover:bg-muted/80 transition-colors"
+                >
+                  <MapPin className="w-8 h-8 text-primary" />
+                  <span className="text-sm font-medium">Ver Mapa</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Facilities View */}
+        {activeView === 'facilities' && (
+          <div className="animate-fadeIn">
+            <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                Centros de Salud
+              </h2>
+              <div className="flex gap-2 flex-wrap">
+                <div className="flex items-center gap-2 px-4 py-2 bg-card border border-border rounded-lg">
+                  <Search className="w-5 h-5 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Buscar..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="bg-transparent outline-none w-48"
+                  />
+                </div>
+                <select
+                  value={comunaFilter}
+                  onChange={(e) => setComunaFilter(e.target.value)}
+                  className="px-4 py-2 bg-card border border-border rounded-lg outline-none"
+                >
+                  <option value="">Todas las Comunas</option>
+                  {COMUNAS.map(comuna => (
+                    <option key={comuna} value={comuna}>{comuna}</option>
+                  ))}
+                </select>
+                <select
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  className="px-4 py-2 bg-card border border-border rounded-lg outline-none"
+                >
+                  <option value="">Todos los Tipos</option>
+                  <option value="CESFAM">CESFAM</option>
+                  <option value="SAPU">SAPU</option>
+                  <option value="Hospital">Hospital</option>
+                  <option value="Clínica">Clínica</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredFacilities.map(facility => (
+                <div key={facility.id} className="bg-card border border-border rounded-xl p-6 hover:border-primary transition-all hover:shadow-lg">
+                  <div className="flex justify-between items-start mb-4">
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${facility.type === 'CESFAM' ? 'bg-blue-500/20 text-blue-400' :
+                      facility.type === 'SAPU' ? 'bg-green-500/20 text-green-400' :
+                        facility.type === 'Hospital' ? 'bg-red-500/20 text-red-400' :
+                          'bg-purple-500/20 text-purple-400'
+                      }`}>
+                      {facility.type}
+                    </span>
+                  </div>
+
+                  <h3 className="text-xl font-bold mb-2">{facility.name}</h3>
+                  <p className="text-muted-foreground text-sm mb-4 flex items-center gap-1">
+                    <MapPin className="w-4 h-4" />
+                    {facility.comuna}
+                  </p>
+
+                  {facility.address && (
+                    <p className="text-sm text-muted-foreground mb-2">{facility.address}</p>
+                  )}
+                  {facility.phone && (
+                    <p className="text-sm text-muted-foreground mb-2">📞 {facility.phone}</p>
+                  )}
+                  {facility.email && (
+                    <p className="text-sm text-muted-foreground mb-2">✉️ {facility.email}</p>
+                  )}
+                  {facility.website && (
+                    <a href={facility.website} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline block mb-2">
+                      🌐 Sitio web
+                    </a>
+                  )}
+
+                  <div className="grid grid-cols-3 gap-2 mt-4">
+                    <button className="px-3 py-2 bg-primary text-primary-foreground rounded-lg text-sm hover:opacity-90 transition-opacity">
+                      Aplicar
+                    </button>
+                    <button className="px-3 py-2 bg-muted rounded-lg text-sm hover:bg-muted/80 transition-colors">
+                      Ruta
+                    </button>
+                    <button
+                      onClick={() => openSingleFacilityInMaps(facility)}
+                      className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors flex items-center justify-center gap-1"
+                      title="Abrir en Google Maps"
+                    >
+                      📍 Maps
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Routes View */}
+        {activeView === 'routes' && (
+          <div className="animate-fadeIn">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                Planificador de Rutas
+              </h2>
+              <div className="text-sm text-muted-foreground">
+                📍 Desde: Baquedano 1044, Villa Alemana
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+              {[
+                { key: 'monday', label: 'Lunes' },
+                { key: 'tuesday', label: 'Martes' },
+                { key: 'wednesday', label: 'Miércoles' },
+                { key: 'thursday', label: 'Jueves' },
+                { key: 'friday', label: 'Viernes' }
+              ].map(({ key: day, label }) => (
+                <RouteDay
+                  key={day}
+                  day={day}
+                  label={label}
+                  facilities={facilities}
+                  routes={routes[day] || []}
+                  onPlanRoute={(selectedComuna) => planRouteForDay(day, selectedComuna)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tracker View */}
+        {activeView === 'tracker' && (
+          <div className="animate-fadeIn">
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent mb-8">
+              Seguimiento de Aplicaciones
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {['pending', 'applied', 'interview', 'accepted'].map(status => (
+                <div key={status} className="bg-card border border-border rounded-xl overflow-hidden">
+                  <div className="bg-muted p-4 border-b border-border">
+                    <h3 className="font-bold capitalize">
+                      {status === 'pending' ? 'Pendiente' : status === 'applied' ? 'Aplicado' : status === 'interview' ? 'Entrevista' : 'Aceptado'}
+                    </h3>
+                    <span className="text-sm text-muted-foreground">
+                      {applications.filter(a => a.status === status).length}
+                    </span>
+                  </div>
+                  <div className="p-4 min-h-[400px]">
+                    {applications.filter(a => a.status === status).length > 0 ? (
+                      applications.filter(a => a.status === status).map(app => (
+                        <div key={app.id} className="mb-2 p-3 bg-muted rounded-lg hover:bg-muted/80 transition-colors cursor-pointer">
+                          <h4 className="font-medium text-sm">{app.facilities?.name}</h4>
+                          <p className="text-xs text-muted-foreground">{app.facilities?.comuna}</p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center mt-8">No hay aplicaciones</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
     </div>
-  );
+  )
+}
+
+// RouteDay Component
+function RouteDay({
+  day,
+  label,
+  facilities,
+  routes,
+  onPlanRoute
+}: {
+  day: string
+  label: string
+  facilities: Facility[]
+  routes: Route[]
+  onPlanRoute: (comuna: string) => void
+}) {
+  const [selectedComuna, setSelectedComuna] = useState('')
+
+  // Get unique comunas
+  const comunas = Array.from(new Set(facilities.map(f => f.comuna))).sort()
+
+  // Get facilities for selected comuna
+  const comunaFacilities = selectedComuna
+    ? facilities.filter(f => f.comuna === selectedComuna)
+    : []
+
+  return (
+    <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <div className="bg-muted p-4 border-b border-border">
+        <h3 className="font-bold mb-2">{label}</h3>
+        <select
+          value={selectedComuna}
+          onChange={(e) => setSelectedComuna(e.target.value)}
+          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
+        >
+          <option value="">Seleccionar Comuna</option>
+          {comunas.map(comuna => (
+            <option key={comuna} value={comuna}>{comuna}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="p-4 min-h-[300px] max-h-[500px] overflow-y-auto">
+        {selectedComuna ? (
+          <>
+            <div className="mb-4">
+              <button
+                onClick={() => onPlanRoute(selectedComuna)}
+                className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm hover:opacity-90 transition-opacity font-medium flex items-center justify-center gap-2"
+              >
+                🗺️ Planificar Ruta Óptima
+              </button>
+              <p className="text-xs text-muted-foreground mt-2 text-center">
+                Abre Google Maps con todos los centros no visitados
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-sm font-bold text-muted-foreground mb-2">
+                {comunaFacilities.length} centros en {selectedComuna}:
+              </h4>
+              {comunaFacilities.map((facility, index) => (
+                <div key={facility.id} className="p-3 bg-muted rounded-lg hover:bg-muted/80 transition-colors">
+                  <div className="flex justify-between items-start mb-1">
+                    <h4 className="font-medium text-sm flex-1">
+                      {index + 1}. {facility.name}
+                    </h4>
+                    <span className={`text-xs px-2 py-1 rounded ${facility.type === 'CESFAM' ? 'bg-blue-500/20 text-blue-400' :
+                        facility.type === 'Hospital' ? 'bg-red-500/20 text-red-400' :
+                          'bg-purple-500/20 text-purple-400'
+                      }`}>
+                      {facility.type}
+                    </span>
+                  </div>
+                  {facility.address && (
+                    <p className="text-xs text-muted-foreground mb-2">📍 {facility.address}</p>
+                  )}
+                  {facility.phone && (
+                    <p className="text-xs text-muted-foreground">📞 {facility.phone}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-sm text-muted-foreground text-center">
+              Selecciona una comuna para planificar tu ruta
+            </p>
+          </div>
+        )}
+
+        {routes.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-border">
+            <h4 className="text-sm font-bold text-muted-foreground mb-2">
+              Ruta Guardada ({routes.length}):
+            </h4>
+            {routes.map((route, index) => (
+              <div key={route.id} className="mb-2 p-2 bg-green-500/10 border border-green-500/20 rounded-lg">
+                <h4 className="font-medium text-xs">{index + 1}. {route.facilities?.name}</h4>
+                <p className="text-xs text-muted-foreground">{route.facilities?.comuna}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
