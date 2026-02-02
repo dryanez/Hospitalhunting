@@ -48,10 +48,8 @@ export default function HomePage() {
 
     if (error) {
       console.error('Error loading facilities:', error)
-      // If table is empty, use initial data
-      if (!data || data.length === 0) {
-        setFacilities(INITIAL_FACILITIES as any)
-      }
+      // Use initial data on error
+      setFacilities(INITIAL_FACILITIES as any)
     } else {
       setFacilities(data || [])
       // If no data, sync initial data
@@ -592,8 +590,8 @@ function RouteDay({
                       {index + 1}. {facility.name}
                     </h4>
                     <span className={`text-xs px-2 py-1 rounded ${facility.type === 'CESFAM' ? 'bg-blue-500/20 text-blue-400' :
-                        facility.type === 'Hospital' ? 'bg-red-500/20 text-red-400' :
-                          'bg-purple-500/20 text-purple-400'
+                      facility.type === 'Hospital' ? 'bg-red-500/20 text-red-400' :
+                        'bg-purple-500/20 text-purple-400'
                       }`}>
                       {facility.type}
                     </span>
