@@ -28,87 +28,20 @@ export default function HomePage() {
   async function loadData() {
     setLoading(true)
     try {
-      await Promise.all([
-        loadFacilities(),
-        loadApplications(),
-        loadRoutes()
-      ])
-    } catch (error) {
-      console.error('Error loading data:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function loadFacilities() {
-    const { data, error } = await supabase
-      .from('facilities')
-      .select('*')
-      .order('comuna', { ascending: true })
-
-    if (error) {
-      console.error('Error loading facilities:', error)
-      // Use initial data on error
+      // Just use local data for now (no Supabase needed)
       setFacilities(INITIAL_FACILITIES as any)
-    } else {
-      setFacilities(data || [])
-      // If no data, sync initial data
-      if (!data || data.length === 0) {
-        await syncInitialData()
-      }
-    }
-  }
-
-  async function syncInitialData() {
-    const { data, error } = await supabase
-      .from('facilities')
-      .insert(INITIAL_FACILITIES)
-      .select()
-
-    if (!error && data) {
-      setFacilities(data)
-    }
-  }
-
-  async function loadApplications() {
-    const { data, error } = await supabase
-      .from('applications')
-      .select(`
-        *,
-        facilities (*)
-      `)
-      .order('created_at', { ascending: false })
-
-    if (!error) {
-      setApplications(data || [])
-    }
-  }
-
-  async function loadRoutes() {
-    const { data, error } = await supabase
-      .from('routes')
-      .select(`
-        *,
-        facilities (*)
-      `)
-      .order('order_index', { ascending: true })
-
-    if (!error && data) {
-      const routesByDay: Record<string, Route[]> = {
+      setApplications([])
+      setRoutes({
         monday: [],
         tuesday: [],
         wednesday: [],
         thursday: [],
         friday: []
-      }
-
-      data.forEach((route: Route) => {
-        if (routesByDay[route.day_of_week]) {
-          routesByDay[route.day_of_week].push(route)
-        }
       })
-
-      setRoutes(routesByDay)
+    } catch (error) {
+      console.error('Error loading data:', error)
+    } finally {
+      setLoading(false)
     }
   }
 
