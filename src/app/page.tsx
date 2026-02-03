@@ -79,15 +79,16 @@ export default function HomePage() {
 
   // Visit tracking functions
   function updateVisitStatus(facilityId: string, status: VisitStatus, data?: Partial<VisitInfo>) {
+    const existingVisit = visits[facilityId] || {}
     const newVisits = {
       ...visits,
       [facilityId]: {
         facilityId,
         status,
-        visitDate: data?.visitDate || new Date().toISOString().split('T')[0],
-        notes: data?.notes || visits[facilityId]?.notes || '',
-        contactPerson: data?.contactPerson || visits[facilityId]?.contactPerson || '',
-        followUpDate: data?.followUpDate || visits[facilityId]?.followUpDate || ''
+        visitDate: data?.visitDate !== undefined ? data.visitDate : (existingVisit.visitDate || new Date().toISOString().split('T')[0]),
+        notes: data?.notes !== undefined ? data.notes : (existingVisit.notes || ''),
+        contactPerson: data?.contactPerson !== undefined ? data.contactPerson : (existingVisit.contactPerson || ''),
+        followUpDate: data?.followUpDate !== undefined ? data.followUpDate : (existingVisit.followUpDate || '')
       }
     }
     saveVisits(newVisits)
