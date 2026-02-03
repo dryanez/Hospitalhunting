@@ -7,10 +7,12 @@ import { Home, MapPin, Calendar, Clock, Plus, Search, Filter, Download, RefreshC
 
 // Visit tracking types
 type VisitStatus = 'to-visit' | 'visiting-today' | 'visited'
+type ApplicationStatus = 'pending' | 'cv-sent' | 'interview' | 'accepted' | 'rejected'
 
 interface VisitInfo {
   facilityId: string
   status: VisitStatus
+  applicationStatus?: ApplicationStatus
   visitDate?: string
   notes?: string
   contactPerson?: string
@@ -85,6 +87,7 @@ export default function HomePage() {
       [facilityId]: {
         facilityId,
         status,
+        applicationStatus: data?.applicationStatus !== undefined ? data.applicationStatus : (existingVisit.applicationStatus || 'pending'),
         visitDate: data?.visitDate !== undefined ? data.visitDate : (existingVisit.visitDate || new Date().toISOString().split('T')[0]),
         notes: data?.notes !== undefined ? data.notes : (existingVisit.notes || ''),
         contactPerson: data?.contactPerson !== undefined ? data.contactPerson : (existingVisit.contactPerson || ''),
@@ -580,31 +583,55 @@ export default function HomePage() {
             <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent mb-8">
               Seguimiento de Aplicaciones
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {['pending', 'applied', 'interview', 'accepted'].map(status => (
-                <div key={status} className="bg-card border border-border rounded-xl overflow-hidden">
-                  <div className="bg-muted p-4 border-b border-border">
-                    <h3 className="font-bold capitalize">
-                      {status === 'pending' ? 'Pendiente' : status === 'applied' ? 'Aplicado' : status === 'interview' ? 'Entrevista' : 'Aceptado'}
-                    </h3>
-                    <span className="text-sm text-muted-foreground">
-                      {applications.filter(a => a.status === status).length}
-                    </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              {[
+                { value: 'pending', label: 'Pendientes' },
+                { value: 'cv-sent', label: 'CV Enviado' },
+                { value: 'interview', label: 'Entrevista' },
+                { value: 'accepted', label: 'Aceptados' },
+                { value: 'rejected', label: 'Rechazados' }
+              ].map(statusConfig => {
+                const facilitiesInStatus = facilities.filter(f => {
+                  const visit = visits[f.id]
+                  const appStatus = visit?.applicationStatus || 'pending'
+                  return appStatus === statusConfig.value
+                })
+
+                return (
+                  <div key={statusConfig.value} className="bg-card border border-border rounded-xl overflow-hidden">
+                    <div className="bg-muted p-4 border-b border-border">
+                      <h3 className="font-bold">{statusConfig.label}</h3>
+                      <span className="text-2xl font-bold">{facilitiesInStatus.length}</span>
+                    </div>
+                    <div className="p-4 min-h-[400px] max-h-[600px] overflow-y-auto">
+                      {facilitiesInStatus.length > 0 ? (
+                        facilitiesInStatus.map(facility => (
+                          <div
+                            key={facility.id}
+                            onClick={() => openVisitModal(facility)}
+                            className="mb-2 p-3 bg-muted rounded-lg hover:bg-muted/80 transition-colors cursor-pointer"
+                          >
+                            <h4 className="font-medium text-sm">{facility.name}</h4>
+                            <p className="text-xs text-muted-foreground">{facility.comuna}</p>
+                            {visits[facility.id]?.notes && (
+                              <p className="text-xs text-muted-foreground italic mt-1 line-clamp-2">
+                                💬 {visits[facility.id].notes}
+                              </p>
+                            )}
+                            {visits[facility.id]?.visitDate && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                📅 {new Date(visits[facility.id].visitDate!).toLocaleDateString('es-CL')}
+                              </p>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground text-center mt-8">No hay centros</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="p-4 min-h-[400px]">
-                    {applications.filter(a => a.status === status).length > 0 ? (
-                      applications.filter(a => a.status === status).map(app => (
-                        <div key={app.id} className="mb-2 p-3 bg-muted rounded-lg hover:bg-muted/80 transition-colors cursor-pointer">
-                          <h4 className="font-medium text-sm">{app.facilities?.name}</h4>
-                          <p className="text-xs text-muted-foreground">{app.facilities?.comuna}</p>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-muted-foreground text-center mt-8">No hay aplicaciones</p>
-                    )}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}
@@ -653,6 +680,42 @@ export default function HomePage() {
                         className="w-4 h-4"
                       />
                       <span className="font-medium">{status.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Application Status */}
+              <div>
+                <label className="block text-sm font-medium mb-3">Estado de Aplicación:</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { value: 'pending', label: '📋 Pendiente' },
+                    { value: 'cv-sent', label: '📄 CV Enviado' },
+                    { value: 'interview', label: '🎤 Entrevista' },
+                    { value: 'accepted', label: '✅ Aceptado' },
+                    { value: 'rejected', label: '❌ Rechazado' }
+                  ].map(appStatus => (
+                    <label
+                      key={appStatus.value}
+                      className={`flex items-center gap-2 p-2 rounded-lg border-2 cursor-pointer transition-all text-sm ${(visits[selectedFacility.id]?.applicationStatus || 'pending') === appStatus.value
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border hover:border-muted-foreground'
+                        }`}
+                    >
+                      <input
+                        type="radio"
+                        name="applicationStatus"
+                        value={appStatus.value}
+                        checked={(visits[selectedFacility.id]?.applicationStatus || 'pending') === appStatus.value}
+                        onChange={() => updateVisitStatus(
+                          selectedFacility.id,
+                          visits[selectedFacility.id]?.status || 'to-visit',
+                          { applicationStatus: appStatus.value as ApplicationStatus }
+                        )}
+                        className="w-4 h-4"
+                      />
+                      <span className="font-medium">{appStatus.label}</span>
                     </label>
                   ))}
                 </div>
