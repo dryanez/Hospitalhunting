@@ -15,10 +15,34 @@ export interface VisitInfo {
 // LocalStorage keys
 const VISITS_KEY = 'medijob-visits'
 const CUSTOM_FACILITIES_KEY = 'medijob-custom-facilities'
+const VERSION_KEY = 'medijob-data-version'
+const CURRENT_VERSION = '2.0' // Increment this to force clear old data
+
+// Check and migrate localStorage version
+function checkVersion(): void {
+    if (typeof window === 'undefined') return
+
+    try {
+        const storedVersion = localStorage.getItem(VERSION_KEY)
+
+        // If version doesn't match, clear all old data
+        if (storedVersion !== CURRENT_VERSION) {
+            console.log('Clearing old localStorage data due to version change...')
+            localStorage.removeItem(VISITS_KEY)
+            localStorage.removeItem(CUSTOM_FACILITIES_KEY)
+            localStorage.setItem(VERSION_KEY, CURRENT_VERSION)
+        }
+    } catch (error) {
+        console.error('Error checking version:', error)
+    }
+}
 
 // Load visits from localStorage
 export function loadVisits(): Record<string, VisitInfo> {
     if (typeof window === 'undefined') return {}
+
+    // Check version first
+    checkVersion()
 
     try {
         const stored = localStorage.getItem(VISITS_KEY)
