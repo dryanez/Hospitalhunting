@@ -537,8 +537,8 @@ export default function HomePage() {
                 <button
                   onClick={() => setHideVisited(!hideVisited)}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all ${hideVisited
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border bg-muted text-muted-foreground'
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border bg-muted text-muted-foreground'
                     }`}
                 >
                   {hideVisited ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -664,7 +664,8 @@ export default function HomePage() {
                   type="date"
                   value={visits[selectedFacility.id]?.visitDate || new Date().toISOString().split('T')[0]}
                   onChange={(e) => updateVisitStatus(selectedFacility.id, visits[selectedFacility.id]?.status || 'to-visit', { visitDate: e.target.value })}
-                  className="w-full px-4 py-2 bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                  style={{ colorScheme: 'dark' }}
                 />
               </div>
 
@@ -699,7 +700,8 @@ export default function HomePage() {
                   type="date"
                   value={visits[selectedFacility.id]?.followUpDate || ''}
                   onChange={(e) => updateVisitStatus(selectedFacility.id, visits[selectedFacility.id]?.status || 'to-visit', { followUpDate: e.target.value })}
-                  className="w-full px-4 py-2 bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                  style={{ colorScheme: 'dark' }}
                 />
               </div>
 
