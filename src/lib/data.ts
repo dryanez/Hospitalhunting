@@ -521,28 +521,124 @@ export const INITIAL_FACILITIES = [
     },
 
     // ========================================
-    // VILLA ALEMANA (2)
+    // VILLA ALEMANA (12)
     // ========================================
+    // Hospital
+    {
+        name: 'Hospital Juana Ross de Edwards (Peñablanca)',
+        type: 'Hospital' as const,
+        comuna: 'Villa Alemana',
+        address: 'El Rincón s/n, Peñablanca',
+        phone: '+56 32 275 9600',
+        email: 'oirs.hpenablanca@ssvq.cl',
+        website: 'http://www.ssvq.cl',
+        notes: 'Hospital público SSVQ. Urgencias 24/7'
+    },
+    // Clínicas Privadas
+    {
+        name: 'Clínica Los Leones',
+        type: 'Clínica' as const,
+        comuna: 'Villa Alemana',
+        address: 'Latorre 98',
+        phone: '+56 32 218 3500',
+        email: 'rrhh@clinicalosleones.cl',
+        website: 'https://www.clinicalosleones.cl',
+        notes: 'Clínica quirúrgica privada. Urgencias y hospitalización'
+    },
+    // CESFAMs Públicos
     {
         name: 'CESFAM Villa Alemana',
         type: 'CESFAM' as const,
         comuna: 'Villa Alemana',
-        address: 'Avenida Baquedano #1140',
-        phone: '323243512 (Secretaría) / 323243523 (OIRS)',
-        email: '',
-        website: 'https://cmva.cl',
-        notes: 'Lun-Vie 08:00-20:00, Sáb 9:00-13:00. Director: Gabriel Guzmán Aguirre'
+        address: 'Roma s/n',
+        phone: '+56 32 324 3511',
+        email: 'oirs@cmva.cl',
+        website: 'https://www.cmva.cl',
+        notes: 'Atención primaria con SAPU'
     },
     {
-        name: 'CESFAM Eduardo Frei Ruiz-Tagle',
+        name: 'CESFAM Eduardo Frei Montalva',
         type: 'CESFAM' as const,
         comuna: 'Villa Alemana',
-        address: 'Rivadavia #1119, Población Rosenquist',
-        phone: '323323530 (Secretaría) / 32-3323542 (OIRS)',
-        email: '',
-        website: 'https://cmva.cl',
-        notes: 'Lun-Vie 08:00-20:00, Sáb 9:00-13:00. Director (S): Felipe León Schufeneger'
+        address: 'Av. Quinta 050, Peñablanca',
+        phone: '+56 32 324 3450',
+        email: 'oirs.efrei@cmva.cl',
+        website: 'https://www.cmva.cl',
+        notes: 'Atención primaria con SAPU'
     },
+    {
+        name: 'CESFAM Juan Bautista Bravo Vega',
+        type: 'CESFAM' as const,
+        comuna: 'Villa Alemana',
+        address: 'Calle Sexta 049, Paradero 11',
+        phone: '+56 32 324 3480',
+        email: 'oirs.jbravo@cmva.cl',
+        website: 'https://www.cmva.cl',
+        notes: 'Atención primaria'
+    },
+    {
+        name: 'CESFAM Las Américas',
+        type: 'CESFAM' as const,
+        comuna: 'Villa Alemana',
+        address: 'Calle Caracas s/n, Gumercindo',
+        phone: '+56 32 324 3530',
+        email: 'oirs.americas@cmva.cl',
+        website: 'https://www.cmva.cl',
+        notes: 'Atención primaria'
+    },
+    // Centros Médicos Privados
+    {
+        name: 'Centro Médico RedSalud Villa Alemana',
+        type: 'Clínica' as const,
+        comuna: 'Villa Alemana',
+        address: 'Av. Valparaíso 650',
+        phone: '600 718 6000',
+        email: 'seleccion@redsalud.cl',
+        website: 'https://www.redsalud.cl',
+        notes: 'Centro médico ambulatorio'
+    },
+    {
+        name: 'Centro Médico Los Alerces',
+        type: 'Clínica' as const,
+        comuna: 'Villa Alemana',
+        address: 'Calle Aranda 41',
+        phone: '+56 32 295 0411',
+        email: 'contacto@cmlosalerces.cl',
+        website: 'https://cmlosalerces.cl',
+        notes: 'Centro médico ambulatorio'
+    },
+    {
+        name: 'IntegraMédica Villa Alemana',
+        type: 'Clínica' as const,
+        comuna: 'Villa Alemana',
+        address: 'Av. Valparaíso 523',
+        phone: '600 636 6666',
+        email: 'seleccion@integramedica.cl',
+        website: 'https://www.integramedica.cl',
+        notes: 'Centro médico y consultas ambulatorias'
+    },
+    {
+        name: 'Centro Médico Villalemana',
+        type: 'Clínica' as const,
+        comuna: 'Villa Alemana',
+        address: 'Santiago 655',
+        phone: '+56 32 312 8056',
+        email: 'info@cmvillalemana.cl',
+        website: '',
+        notes: 'Centro médico especialistas y consulta general'
+    },
+    // Salud Mental
+    {
+        name: 'COSAM Villa Alemana',
+        type: 'CESFAM' as const,
+        comuna: 'Villa Alemana',
+        address: 'Santiago 540',
+        phone: '+56 32 324 3400',
+        email: 'oirs.cosam@cmva.cl',
+        website: 'https://www.cmva.cl',
+        notes: 'Centro de Salud Mental. Atención ambulatoria salud mental'
+    },
+
 
     // ========================================
     // SAN ANTONIO (6)
