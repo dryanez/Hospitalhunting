@@ -3,7 +3,19 @@
 import { useState, useEffect } from 'react'
 import { supabase, type Facility, type Application, type Route } from '@/lib/supabase'
 import { COMUNAS, INITIAL_FACILITIES } from '@/lib/data'
-import { Home, MapPin, Calendar, Clock, Plus, Search, Filter, Download, RefreshCw } from 'lucide-react'
+import { Home, MapPin, Calendar, Clock, Plus, Search, Filter, Download, RefreshCw, X, Save, Eye, EyeOff } from 'lucide-react'
+
+// Visit tracking types
+type VisitStatus = 'to-visit' | 'visiting-today' | 'visited'
+
+interface VisitInfo {
+  facilityId: string
+  status: VisitStatus
+  visitDate?: string
+  notes?: string
+  contactPerson?: string
+  followUpDate?: string
+}
 
 export default function HomePage() {
   const [activeView, setActiveView] = useState('dashboard')
@@ -21,9 +33,29 @@ export default function HomePage() {
   const [comunaFilter, setComunaFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
 
+  // Visit tracking
+  const [visits, setVisits] = useState<Record<string, VisitInfo>>({})
+  const [selectedFacility, setSelectedFacility] = useState<Facility | null>(null)
+  const [showVisitModal, setShowVisitModal] = useState(false)
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [hideVisited, setHideVisited] = useState(true)
+
   useEffect(() => {
     loadData()
+    loadVisits()
   }, [])
+
+  function loadVisits() {
+    const stored = localStorage.getItem('medijob-visits')
+    if (stored) {
+      setVisits(JSON.parse(stored))
+    }
+  }
+
+  function saveVisits(newVisits: Record<string, VisitInfo>) {
+    localStorage.setItem('medijob-visits', JSON.stringify(newVisits))
+    setVisits(newVisits)
+  }
 
   async function loadData() {
     setLoading(true)
@@ -44,6 +76,65 @@ export default function HomePage() {
       setLoading(false)
     }
   }
+
+  // Visit tracking functions
+  function updateVisitStatus(facilityId: string, status: VisitStatus, data?: Partial<VisitInfo>) {
+    const newVisits = {
+      ...visits,
+      [facilityId]: {
+        facilityId,
+        status,
+        visitDate: data?.visitDate || new Date().toISOString().split('T')[0],
+        notes: data?.notes || visits[facilityId]?.notes || '',
+        contactPerson: data?.contactPerson || visits[facilityId]?.contactPerson || '',
+        followUpDate: data?.followUpDate || visits[facilityId]?.followUpDate || ''
+      }
+    }
+    saveVisits(newVisits)
+  }
+
+  function openVisitModal(facility: Facility) {
+    setSelectedFacility(facility)
+    setShowVisitModal(true)
+  }
+
+  function addNewFacility(facilityData: Partial<Facility>) {
+    const newFacility: Facility = {
+      id: `custom-${Date.now()}`,
+      name: facilityData.name || '',
+      type: facilityData.type || 'CESFAM',
+      comuna: facilityData.comuna || '',
+      address: facilityData.address || '',
+      phone: facilityData.phone || '',
+      email: facilityData.email || '',
+      website: facilityData.website || '',
+      notes: facilityData.notes || '',
+      created_at: new Date().toISOString()
+    }
+
+    const updatedFacilities = [...facilities, newFacility]
+    setFacilities(updatedFacilities)
+
+    // Save to localStorage
+    localStorage.setItem('medijob-custom-facilities', JSON.stringify(
+      updatedFacilities.filter(f => f.id.startsWith('custom-'))
+    ))
+
+    setShowAddModal(false)
+  }
+
+  // Load custom facilities from localStorage
+  useEffect(() => {
+    const customFacilities = localStorage.getItem('medijob-custom-facilities')
+    if (customFacilities) {
+      const custom = JSON.parse(customFacilities)
+      setFacilities(prev => {
+        const existingIds = new Set(prev.map(f => f.id))
+        const newCustom = custom.filter((f: Facility) => !existingIds.has(f.id))
+        return [...prev, ...newCustom]
+      })
+    }
+  }, [])
 
   // Route planning functions
   function planRouteForDay(day: string, selectedComuna: string) {
@@ -261,7 +352,10 @@ export default function HomePage() {
             <div className="bg-card border border-border rounded-xl p-6">
               <h3 className="text-xl font-bold mb-4">Acciones Rápidas</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <button className="flex flex-col items-center gap-2 p-4 bg-muted rounded-lg hover:bg-muted/80 transition-colors">
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="flex flex-col items-center gap-2 p-4 bg-muted rounded-lg hover:bg-muted/80 transition-colors"
+                >
                   <Plus className="w-8 h-8 text-primary" />
                   <span className="text-sm font-medium">Agregar Centro</span>
                 </button>
@@ -296,6 +390,13 @@ export default function HomePage() {
                 Centros de Salud
               </h2>
               <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity font-medium"
+                >
+                  <Plus className="w-5 h-5" />
+                  Agregar Centro
+                </button>
                 <div className="flex items-center gap-2 px-4 py-2 bg-card border border-border rounded-lg">
                   <Search className="w-5 h-5 text-muted-foreground" />
                   <input
@@ -331,56 +432,96 @@ export default function HomePage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredFacilities.map(facility => (
-                <div key={facility.id} className="bg-card border border-border rounded-xl p-6 hover:border-primary transition-all hover:shadow-lg">
-                  <div className="flex justify-between items-start mb-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${facility.type === 'CESFAM' ? 'bg-blue-500/20 text-blue-400' :
-                      facility.type === 'SAPU' ? 'bg-green-500/20 text-green-400' :
-                        facility.type === 'Hospital' ? 'bg-red-500/20 text-red-400' :
-                          'bg-purple-500/20 text-purple-400'
-                      }`}>
-                      {facility.type}
-                    </span>
+              {filteredFacilities.map(facility => {
+                const visitStatus = visits[facility.id]?.status
+                return (
+                  <div
+                    key={facility.id}
+                    onClick={() => openVisitModal(facility)}
+                    className={`bg-card border rounded-xl p-6 hover:shadow-lg cursor-pointer transition-all ${visitStatus === 'visited' ? 'border-green-500/50' :
+                      visitStatus === 'visiting-today' ? 'border-yellow-500/50' :
+                        'border-border hover:border-primary'
+                      }`}
+                  >
+                    <div className="flex justify-between items-start mb-4 flex-wrap gap-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${facility.type === 'CESFAM' ? 'bg-blue-500/20 text-blue-400' :
+                        facility.type === 'SAPU' ? 'bg-green-500/20 text-green-400' :
+                          facility.type === 'Hospital' ? 'bg-red-500/20 text-red-400' :
+                            'bg-purple-500/20 text-purple-400'
+                        }`}>
+                        {facility.type}
+                      </span>
+
+                      {/* Visit Status Badge */}
+                      {visitStatus && (
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold border ${visitStatus === 'visited' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
+                          visitStatus === 'visiting-today' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' :
+                            'bg-gray-500/20 text-gray-400 border-gray-500/30'
+                          }`}>
+                          {visitStatus === 'visited' ? '✓ Visitado' :
+                            visitStatus === 'visiting-today' ? '⏰ Hoy' :
+                              'Por visitar'}
+                        </span>
+                      )}
+                    </div>
+
+                    <h3 className="text-xl font-bold mb-2">{facility.name}</h3>
+                    <p className="text-muted-foreground text-sm mb-4 flex items-center gap-1">
+                      <MapPin className="w-4 h-4" />
+                      {facility.comuna}
+                    </p>
+
+                    {visits[facility.id]?.notes && (
+                      <p className="text-sm text-muted-foreground mb-2 italic line-clamp-2">
+                        💬 {visits[facility.id].notes}
+                      </p>
+                    )}
+
+                    {facility.address && (
+                      <p className="text-sm text-muted-foreground mb-2">{facility.address}</p>
+                    )}
+                    {facility.phone && (
+                      <p className="text-sm text-muted-foreground mb-2">📞 {facility.phone}</p>
+                    )}
+                    {facility.email && (
+                      <p className="text-sm text-muted-foreground mb-2">✉️ {facility.email}</p>
+                    )}
+                    {facility.website && (
+                      <a
+                        href={facility.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-sm text-primary hover:underline block mb-2"
+                      >
+                        🌐 Sitio web
+                      </a>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-2 mt-4">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openVisitModal(facility)
+                        }}
+                        className="px-3 py-2 bg-primary text-primary-foreground rounded-lg text-sm hover:opacity-90 transition-opacity"
+                      >
+                        {visitStatus === 'visited' ? 'Ver Detalles' : 'Marcar Visita'}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openSingleFacilityInMaps(facility)
+                        }}
+                        className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors flex items-center justify-center gap-1"
+                        title="Abrir en Google Maps"
+                      >
+                        📍 Maps
+                      </button>
+                    </div>
                   </div>
-
-                  <h3 className="text-xl font-bold mb-2">{facility.name}</h3>
-                  <p className="text-muted-foreground text-sm mb-4 flex items-center gap-1">
-                    <MapPin className="w-4 h-4" />
-                    {facility.comuna}
-                  </p>
-
-                  {facility.address && (
-                    <p className="text-sm text-muted-foreground mb-2">{facility.address}</p>
-                  )}
-                  {facility.phone && (
-                    <p className="text-sm text-muted-foreground mb-2">📞 {facility.phone}</p>
-                  )}
-                  {facility.email && (
-                    <p className="text-sm text-muted-foreground mb-2">✉️ {facility.email}</p>
-                  )}
-                  {facility.website && (
-                    <a href={facility.website} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline block mb-2">
-                      🌐 Sitio web
-                    </a>
-                  )}
-
-                  <div className="grid grid-cols-3 gap-2 mt-4">
-                    <button className="px-3 py-2 bg-primary text-primary-foreground rounded-lg text-sm hover:opacity-90 transition-opacity">
-                      Aplicar
-                    </button>
-                    <button className="px-3 py-2 bg-muted rounded-lg text-sm hover:bg-muted/80 transition-colors">
-                      Ruta
-                    </button>
-                    <button
-                      onClick={() => openSingleFacilityInMaps(facility)}
-                      className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors flex items-center justify-center gap-1"
-                      title="Abrir en Google Maps"
-                    >
-                      📍 Maps
-                    </button>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}
@@ -388,12 +529,26 @@ export default function HomePage() {
         {/* Routes View */}
         {activeView === 'routes' && (
           <div className="animate-fadeIn">
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
               <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
                 Planificador de Rutas
               </h2>
-              <div className="text-sm text-muted-foreground">
-                📍 Desde: Baquedano 1044, Villa Alemana
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setHideVisited(!hideVisited)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all ${hideVisited
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border bg-muted text-muted-foreground'
+                    }`}
+                >
+                  {hideVisited ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  <span className="font-medium text-sm">
+                    {hideVisited ? 'Ocultar Visitados' : 'Mostrar Todos'}
+                  </span>
+                </button>
+                <div className="text-sm text-muted-foreground">
+                  📍 Desde: Baquedano 1044, Villa Alemana
+                </div>
               </div>
             </div>
 
@@ -453,6 +608,262 @@ export default function HomePage() {
           </div>
         )}
       </main>
+
+      {/* Visit Tracking Modal */}
+      {showVisitModal && selectedFacility && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-card border-b border-border p-6 flex justify-between items-start">
+              <div>
+                <h3 className="text-xl font-bold">{selectedFacility.name}</h3>
+                <p className="text-sm text-muted-foreground">{selectedFacility.comuna}</p>
+              </div>
+              <button
+                onClick={() => setShowVisitModal(false)}
+                className="p-2 hover:bg-muted rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Status Selection */}
+              <div>
+                <label className="block text-sm font-medium mb-3">Estado de Visita:</label>
+                <div className="space-y-2">
+                  {[
+                    { value: 'to-visit', label: 'Por Visitar', color: 'gray' },
+                    { value: 'visiting-today', label: '⏰ Visitando Hoy', color: 'yellow' },
+                    { value: 'visited', label: '✓ Visitado', color: 'green' }
+                  ].map(status => (
+                    <label
+                      key={status.value}
+                      className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${visits[selectedFacility.id]?.status === status.value
+                        ? `border-${status.color}-500 bg-${status.color}-500/10`
+                        : 'border-border hover:border-muted-foreground'
+                        }`}
+                    >
+                      <input
+                        type="radio"
+                        name="visitStatus"
+                        value={status.value}
+                        checked={visits[selectedFacility.id]?.status === status.value}
+                        onChange={() => updateVisitStatus(selectedFacility.id, status.value as VisitStatus)}
+                        className="w-4 h-4"
+                      />
+                      <span className="font-medium">{status.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Visit Date */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Fecha de Visita:</label>
+                <input
+                  type="date"
+                  value={visits[selectedFacility.id]?.visitDate || new Date().toISOString().split('T')[0]}
+                  onChange={(e) => updateVisitStatus(selectedFacility.id, visits[selectedFacility.id]?.status || 'to-visit', { visitDate: e.target.value })}
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              {/* Contact Person */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Persona de Contacto:</label>
+                <input
+                  type="text"
+                  placeholder="Ej: María González - Directora"
+                  value={visits[selectedFacility.id]?.contactPerson || ''}
+                  onChange={(e) => updateVisitStatus(selectedFacility.id, visits[selectedFacility.id]?.status || 'to-visit', { contactPerson: e.target.value })}
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Notas de la Visita:</label>
+                <textarea
+                  placeholder="¿Qué pasó? CV entregado, entrevista programada, etc..."
+                  value={visits[selectedFacility.id]?.notes || ''}
+                  onChange={(e) => updateVisitStatus(selectedFacility.id, visits[selectedFacility.id]?.status || 'to-visit', { notes: e.target.value })}
+                  rows={4}
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary resize-none"
+                />
+              </div>
+
+              {/* Follow Up Date */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Fecha de Seguimiento (opcional):</label>
+                <input
+                  type="date"
+                  value={visits[selectedFacility.id]?.followUpDate || ''}
+                  onChange={(e) => updateVisitStatus(selectedFacility.id, visits[selectedFacility.id]?.status || 'to-visit', { followUpDate: e.target.value })}
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => setShowVisitModal(false)}
+                  className="flex-1 px-4 py-2 bg-muted hover:bg-muted/80 rounded-lg font-medium transition-colors"
+                >
+                  Cerrar
+                </button>
+                <button
+                  onClick={() => openSingleFacilityInMaps(selectedFacility)}
+                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                >
+                  <MapPin className="w-4 h-4" />
+                  Google Maps
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Facility Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-card border-b border-border p-6 flex justify-between items-start">
+              <h3 className="text-xl font-bold">➕ Agregar Nuevo Centro</h3>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="p-2 hover:bg-muted rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                const formData = new FormData(e.currentTarget)
+                addNewFacility({
+                  name: formData.get('name') as string,
+                  type: formData.get('type') as any,
+                  comuna: formData.get('comuna') as string,
+                  address: formData.get('address') as string,
+                  phone: formData.get('phone') as string,
+                  email: formData.get('email') as string,
+                  website: formData.get('website') as string,
+                  notes: formData.get('notes') as string
+                })
+              }}
+              className="p-6 space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium mb-2">Nombre del Centro *</label>
+                <input
+                  type="text"
+                  name="name"
+                  required
+                  placeholder="Ej: CESFAM Nuevo..."
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Tipo *</label>
+                <select
+                  name="type"
+                  required
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="CESFAM">CESFAM</option>
+                  <option value="Hospital">Hospital</option>
+                  <option value="Clínica">Clínica</option>
+                  <option value="SAPU">SAPU</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Comuna *</label>
+                <select
+                  name="comuna"
+                  required
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Seleccionar...</option>
+                  {COMUNAS.map(comuna => (
+                    <option key={comuna} value={comuna}>{comuna}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Dirección</label>
+                <input
+                  type="text"
+                  name="address"
+                  placeholder="Calle 123, Sector..."
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Teléfono</label>
+                <input
+                  type="text"
+                  name="phone"
+                  placeholder="+56 32 123 4567"
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Email</label>
+                <input
+                  type="email"
+                  name="email"
+                  placeholder="contacto@centro.cl"
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Sitio Web</label>
+                <input
+                  type="url"
+                  name="website"
+                  placeholder="https://..."
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Notas</label>
+                <textarea
+                  name="notes"
+                  placeholder="Información adicional..."
+                  rows={3}
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary resize-none"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="flex-1 px-4 py-2 bg-muted hover:bg-muted/80 rounded-lg font-medium transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-primary hover:opacity-90 text-primary-foreground rounded-lg font-medium transition-opacity flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Agregar Centro
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
