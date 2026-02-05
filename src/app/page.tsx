@@ -279,6 +279,21 @@ export default function HomePage() {
                 <Clock className="w-5 h-5" />
                 Seguimiento
               </button>
+
+              {/* Reset Data Button */}
+              <button
+                onClick={() => {
+                  if (confirm('¿Borrar todos los datos? (Visitas, aplicaciones, centros personalizados)')) {
+                    localStorage.clear()
+                    window.location.reload()
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors ml-auto"
+                title="Resetear todos los datos"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Reset
+              </button>
             </nav>
           </div>
         </div>
